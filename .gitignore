@@ -1,0 +1,24 @@
+# Windows system files
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Python (future projects)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Environment files and secrets
+.env
+.env.*
+
+# IDE temporary settings
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.log
