@@ -1,974 +1,271 @@
-\# LAB 01 — Basic Network Connectivity
+# LAB 01 — Basic Network Connectivity
 
+**Environment:** Kathara · Docker · Linux  
+**Tools:** PowerShell · tcpdump · Wireshark  
+**Protocols:** Ethernet · ARP · IPv4 · ICMP
 
+## Overview
 
-\*\*Category:\*\* Computer Networking  
+This lab explores communication between two Linux hosts connected to the same virtual Ethernet network in Kathara. It covers static IPv4 addressing, connectivity testing, ARP resolution, ICMP packet exchange, and packet inspection with tcpdump and Wireshark.
 
-\*\*Difficulty:\*\* Beginner  
+**Objectives**
 
-\*\*Environment:\*\* Kathara, Docker, Linux, Windows PowerShell  
+- Build a two-host virtual LAN using Kathara.
+- Configure static IPv4 addresses through startup scripts.
+- Verify connectivity with `ping`.
+- Observe ARP Requests and Replies.
+- Capture and analyze ICMP Echo Requests and Replies.
+- Keep the configuration reproducible and the evidence available for review.
 
-\*\*Tools:\*\* Kathara, tcpdump, Wireshark  
-
-\*\*Protocols:\*\* Ethernet, ARP, IPv4, ICMP
-
-
-
-\---
-
-
-
-\## 1. Overview
-
-
-
-This laboratory demonstrates basic network communication between two Linux hosts connected to the same virtual Local Area Network (LAN).
-
-
-
-The network was built using \*\*Kathara\*\*, a container-based network emulation tool, and \*\*Docker\*\*.
-
-
-
-The objective is to understand IP addressing, local network connectivity, MAC address resolution, ICMP communication, and packet analysis using tcpdump and Wireshark.
-
-
-
-The laboratory also introduces automated network configuration using Kathara startup scripts.
-
-
-
-\## 2. Learning Objectives
-
-
-
-By completing this laboratory, the following networking concepts were explored:
-
-
-
-\- Creating virtual network topologies using Kathara.
-
-\- Understanding Linux network interfaces.
-
-\- Configuring static IPv4 addresses.
-
-\- Understanding IP subnets and subnet masks.
-
-\- Testing connectivity using ICMP Echo Request and Echo Reply.
-
-\- Understanding ARP and MAC address resolution.
-
-\- Capturing network traffic using tcpdump.
-
-\- Analyzing Ethernet, ARP, IPv4, and ICMP packets using Wireshark.
-
-\- Automating network configuration using startup scripts.
-
-
-
-\## 3. Network Topology
-
-
-
-The network consists of two Linux hosts connected to the same virtual Ethernet collision domain.
-
-
+## 1. Network Topology
 
 ```text
+                 Collision domain A
+                  192.168.10.0/24
 
-&#x20;             LAN A
-
-&#x20;       192.168.10.0/24
-
-
-
-&#x20;  +-------------+       +-------------+
-
-&#x20;  |     PC1     |       |     PC2     |
-
-&#x20;  |             |       |             |
-
-&#x20;  | eth0        |-------| eth0        |
-
-&#x20;  |             |       |             |
-
-&#x20;  | 192.168.10.10       | 192.168.10.20
-
-&#x20;  +-------------+       +-------------+
-
+       +----------------+   +----------------+
+       |      PC1       |   |      PC2       |
+       |                |   |                |
+       | eth0           +---+ eth0           |
+       | 192.168.10.10  |   | 192.168.10.20  |
+       +----------------+   +----------------+
 ```
 
+| Host | Interface | IPv4 address | Subnet |
+| --- | --- | --- | --- |
+| PC1 | `eth0` | `192.168.10.10` | `/24` |
+| PC2 | `eth0` | `192.168.10.20` | `/24` |
 
+Both hosts share the same subnet and Ethernet collision domain. No router is required for their communication.
 
-\### IP Addressing Table
-
-
-
-| Device | Interface | IPv4 Address | Subnet Mask |
-
-|---|---|---|---|
-
-| PC1 | eth0 | 192.168.10.10 | 255.255.255.0 |
-
-| PC2 | eth0 | 192.168.10.20 | 255.255.255.0 |
-
-
-
-Both hosts belong to the `192.168.10.0/24` subnet.
-
-
-
-Since they share the same IP subnet and Ethernet segment, communication can occur without a router.
-
-
-
-\## 4. Project Structure
-
-
+## 2. Project Files
 
 ```text
-
 01-basic-connectivity/
-
-│
-
-├── lab.conf
-
-├── pc1.startup
-
-├── pc2.startup
-
 ├── README.md
-
-│
-
+├── lab.conf
+├── pc1.startup
+├── pc2.startup
+├── screenshots/
+│   ├── 01-arp-request.png
+│   ├── 02-arp-reply.png
+│   ├── 03-icmp-request.png
+│   └── 04-icmp-reply.png
 └── shared/
-
-&#x20;   └── lab01-arp-icmp.pcap
-
+    └── lab01-arp-icmp.pcap
 ```
 
+The `.pcap` file contains the captured packets for independent analysis in Wireshark.
 
+## 3. Kathara Configuration
 
-\*\*File descriptions:\*\*
-
-
-
-\- `lab.conf` — Defines the virtual network topology.
-
-\- `pc1.startup` — Configures PC1 automatically.
-
-\- `pc2.startup` — Configures PC2 automatically.
-
-\- `README.md` — Laboratory documentation.
-
-\- `shared/lab01-arp-icmp.pcap` — Captured ARP and ICMP traffic for analysis.
-
-
-
-\## 5. Network Configuration
-
-
-
-\### 5.1 Kathara Topology
-
-
-
-The `lab.conf` file defines the connections between the two hosts.
-
-
+**`lab.conf`** — Connects both hosts to collision domain `A`.
 
 ```ini
-
-pc1\[0]=A
-
-pc2\[0]=A
-
+pc1[0]=A
+pc2[0]=A
 ```
 
-
-
-Both hosts are connected to collision domain `A`.
-
-
-
-Interface index `\[0]` corresponds to the Linux interface `eth0`.
-
-
-
-\### 5.2 PC1 Configuration
-
-
-
-File: `pc1.startup`
-
-
+**`pc1.startup`** — Assigns PC1's IPv4 address.
 
 ```bash
-
 ip addr add 192.168.10.10/24 dev eth0
-
 ```
 
-
-
-\### 5.3 PC2 Configuration
-
-
-
-File: `pc2.startup`
-
-
+**`pc2.startup`** — Assigns PC2's IPv4 address.
 
 ```bash
-
 ip addr add 192.168.10.20/24 dev eth0
-
 ```
 
+Kathara executes the `.startup` scripts when the lab starts. This avoids re-entering each IP configuration manually after recreating the containers.
 
+## 4. Run the Lab
 
-These startup scripts allow Kathara to configure the hosts automatically when the laboratory is started.
+Run the following commands in PowerShell **from this lab directory**.
 
-
-
-This improves reproducibility and eliminates the need to assign IP addresses manually after recreating the containers.
-
-
-
-\## 6. Running the Laboratory
-
-
-
-\### Step 1 — Validate the topology
-
-
-
-From the laboratory directory:
-
-
+**Start both machines:**
 
 ```powershell
-
-kathara lstart --print
-
-```
-
-
-
-Expected validation message:
-
-
-
-```text
-
-lab.conf file is correct.
-
-```
-
-
-
-\### Step 2 — Start the laboratory
-
-
-
-```powershell
-
 kathara lstart --noterminals
-
 ```
 
-
-
-\### Step 3 — Verify IP addresses
-
-
-
-Check PC1:
-
-
+**Inspect their interfaces:**
 
 ```powershell
-
 kathara exec pc1 "ip -br addr"
-
-```
-
-
-
-Check PC2:
-
-
-
-```powershell
-
 kathara exec pc2 "ip -br addr"
-
 ```
 
-
-
-Expected IPv4 configuration:
-
-
-
-```text
-
-PC1 eth0: 192.168.10.10/24
-
-PC2 eth0: 192.168.10.20/24
-
-```
-
-
-
-\### Step 4 — Test connectivity
-
-
+**Test connectivity from PC1 to PC2:**
 
 ```powershell
-
 kathara exec pc1 "ping -c 4 192.168.10.20"
-
 ```
 
-
-
-The command sends four ICMP Echo Requests from PC1 to PC2.
-
-
-
-\### Step 5 — Stop the laboratory
-
-
+**Stop and clean up the lab when finished:**
 
 ```powershell
-
 kathara lclean
-
 ```
 
+## 5. Connectivity Results
 
-
-This removes the laboratory containers without deleting the local project configuration files.
-
-
-
-\## 7. Connectivity Test Results
-
-
-
-The connectivity test between PC1 and PC2 completed successfully.
-
-
-
-\*\*Recorded output:\*\*
-
-
+The four-packet test from PC1 to PC2 returned:
 
 ```text
-
-4 packets transmitted, 4 received
-
-0% packet loss
-
-
-
-rtt min/avg/max/mdev =
-
-0.784/0.888/1.078/0.112 ms
-
+4 packets transmitted, 4 received, 0% packet loss, time 3004ms
+rtt min/avg/max/mdev = 0.784/0.888/1.078/0.112 ms
 ```
 
-
-
-\### Results
-
-
-
-| Metric | Measured Value |
-
-|---|---|
-
-| Packets transmitted | 4 |
-
+| Metric | Recorded result |
+| --- | ---: |
+| Packets sent | 4 |
 | Packets received | 4 |
-
 | Packet loss | 0% |
-
 | Minimum RTT | 0.784 ms |
-
 | Average RTT | 0.888 ms |
-
 | Maximum RTT | 1.078 ms |
 
+**Result:** PC1 successfully reached PC2 within the virtual LAN. The latency values describe this local virtual environment and are not measurements of a physical network.
 
+## 6. Packet Capture
 
-\*\*Result:\*\* Successful ICMP communication between PC1 and PC2.
-
-
-
-These measurements were obtained in a local virtual networking environment.
-
-
-
-\## 8. ARP Analysis
-
-
-
-\### 8.1 What is ARP?
-
-
-
-Address Resolution Protocol (ARP) is used to resolve an IPv4 address to a link-layer hardware address, typically an Ethernet MAC address.
-
-
-
-Before PC1 can send Ethernet frames to PC2, it must determine the MAC address associated with `192.168.10.20`, unless that mapping is already cached.
-
-
-
-\### 8.2 ARP Request
-
-
-
-The captured ARP Request contained:
-
-
-
-```text
-
-Who has 192.168.10.20?
-
-Tell 192.168.10.10
-
-```
-
-
-
-Observed Ethernet information:
-
-
-
-| Field | Value |
-
-|---|---|
-
-| Source MAC | ca:1f:68:1f:c5:6e |
-
-| Destination MAC | ff:ff:ff:ff:ff:ff |
-
-| EtherType | 0x0806 |
-
-| ARP Opcode | 1 — Request |
-
-| Sender IP | 192.168.10.10 |
-
-| Target IP | 192.168.10.20 |
-
-| Target MAC | 00:00:00:00:00:00 |
-
-
-
-The destination MAC is the Ethernet broadcast address because PC1 does not yet know PC2's MAC address.
-
-
-
-\### 8.3 ARP Reply
-
-
-
-PC2 responds with its MAC address.
-
-
-
-```text
-
-192.168.10.20 is at f2:9c:a6:6e:c2:13
-
-```
-
-
-
-| Field | Value |
-
-|---|---|
-
-| Source MAC | f2:9c:a6:6e:c2:13 |
-
-| Destination MAC | ca:1f:68:1f:c5:6e |
-
-| ARP Opcode | 2 — Reply |
-
-| Sender IP | 192.168.10.20 |
-
-| Target IP | 192.168.10.10 |
-
-
-
-Unlike the initial broadcast ARP Request, this ARP Reply is sent directly to PC1 using unicast communication.
-
-
-
-The MAC addresses shown above were observed in this laboratory session. They may differ when the containers are recreated.
-
-
-
-\## 9. ICMP Packet Analysis
-
-
-
-Internet Control Message Protocol (ICMP) is commonly used for network diagnostics, including the `ping` utility.
-
-
-
-\### 9.1 ICMP Echo Request
-
-
-
-Observed in Wireshark, packet 9:
-
-
-
-| Field | Value |
-
-|---|---|
-
-| Source IP | 192.168.10.10 |
-
-| Destination IP | 192.168.10.20 |
-
-| IPv4 Protocol | ICMP (1) |
-
-| TTL | 64 |
-
-| ICMP Type | 8 — Echo Request |
-
-| ICMP Code | 0 |
-
-
-
-PC1 sends an Echo Request to determine whether PC2 is reachable.
-
-
-
-\### 9.2 ICMP Echo Reply
-
-
-
-Observed in Wireshark, packet 10:
-
-
-
-| Field | Value |
-
-|---|---|
-
-| Source IP | 192.168.10.20 |
-
-| Destination IP | 192.168.10.10 |
-
-| IPv4 Protocol | ICMP (1) |
-
-| TTL | 64 |
-
-| ICMP Type | 0 — Echo Reply |
-
-| ICMP Code | 0 |
-
-
-
-PC2 responds to the Echo Request, confirming communication between the two hosts.
-
-
-
-\### 9.3 Packet Encapsulation
-
-
-
-The captured ICMP Echo Request demonstrates packet encapsulation:
-
-
-
-```text
-
-Ethernet II Frame
-
-│
-
-├── Ethernet Header (14 bytes)
-
-│
-
-└── IPv4 Packet (84 bytes)
-
-&#x20;   │
-
-&#x20;   ├── IPv4 Header (20 bytes)
-
-&#x20;   │
-
-&#x20;   └── ICMP Message (64 bytes)
-
-&#x20;       │
-
-&#x20;       ├── ICMP Header (8 bytes)
-
-&#x20;       └── Payload (56 bytes)
-
-```
-
-
-
-\*\*Total Ethernet frame size: 98 bytes\*\*
-
-
-
-The IPv4 packet is encapsulated inside an Ethernet frame, while the ICMP message is carried inside the IPv4 packet.
-
-
-
-\## 10. Packet Capture with tcpdump
-
-
-
-Traffic was captured on PC2 using:
-
-
+Traffic was captured on PC2 using `tcpdump`:
 
 ```bash
-
 tcpdump -i eth0 -nn -e -w /shared/lab01-arp-icmp.pcap 'arp or icmp'
-
 ```
 
+| Option | Meaning |
+| --- | --- |
+| `-i eth0` | Capture on interface `eth0` |
+| `-nn` | Disable address and port name resolution |
+| `-e` | Include link-layer details when printing packets |
+| `-w` | Write packets to a capture file |
+| `arp or icmp` | Capture only ARP or ICMP traffic |
 
-
-\### Command Explanation
-
-
-
-| Argument | Description |
-
-|---|---|
-
-| `-i eth0` | Capture traffic on interface eth0 |
-
-| `-nn` | Disable host and port name resolution |
-
-| `-e` | Include link-layer information in text output |
-
-| `-w` | Write captured packets to a PCAP file |
-
-| `arp or icmp` | Capture filter for ARP and ICMP traffic |
-
-
-
-Before generating traffic, the ARP neighbor cache was cleared on PC1:
-
-
+To trigger new ARP resolution, the neighbor cache was cleared on PC1 before sending a ping:
 
 ```powershell
-
 kathara exec pc1 "ip neigh flush dev eth0"
-
-```
-
-
-
-Then an ICMP Echo Request was generated:
-
-
-
-```powershell
-
 kathara exec pc1 "ping -c 1 192.168.10.20"
-
 ```
 
+The resulting capture is available at [`shared/lab01-arp-icmp.pcap`](shared/lab01-arp-icmp.pcap) and contains **12 packets**, including ARP and ICMP traffic.
 
+> Note: Captured MAC addresses can change when Kathara recreates the containers.
 
-The capture was stopped using `Ctrl + C`.
+## 7. ARP Analysis
 
+ARP allows a host to discover the Ethernet MAC address corresponding to an IPv4 address on its local network.
 
+### ARP Request — Packet 7
 
-\### Capture Results
+PC1 broadcasts a question to the LAN:
 
+> Who has 192.168.10.20? Tell 192.168.10.10
 
+| Field | Captured value |
+| --- | --- |
+| Sender IP | `192.168.10.10` |
+| Sender MAC | `ca:1f:68:1f:c5:6e` |
+| Target IP | `192.168.10.20` |
+| ARP target MAC | `00:00:00:00:00:00` |
+| Ethernet destination MAC | `ff:ff:ff:ff:ff:ff` (broadcast) |
+| ARP Opcode | `1` (Request) |
 
-\- 12 packets were present in the Wireshark capture.
+![Wireshark capture of ARP Request](screenshots/01-arp-request.png)
 
-\- Both ARP and ICMP traffic were observed.
+### ARP Reply — Packet 8
 
-\- tcpdump reported 0 packets dropped by the kernel.
+PC2 responds directly to PC1:
 
+> 192.168.10.20 is at f2:9c:a6:6e:c2:13
 
+| Field | Captured value |
+| --- | --- |
+| Sender IP | `192.168.10.20` |
+| Sender MAC | `f2:9c:a6:6e:c2:13` |
+| Target IP | `192.168.10.10` |
+| Ethernet destination MAC | `ca:1f:68:1f:c5:6e` (unicast) |
+| ARP Opcode | `2` (Reply) |
 
-The capture is stored in:
+![Wireshark capture of ARP Reply](screenshots/02-arp-reply.png)
 
+**Observation:** The Request uses an Ethernet broadcast because PC1 does not yet know PC2's MAC address. The Reply uses unicast because PC2 knows the requesting host's MAC address.
 
+## 8. ICMP Analysis
 
-`shared/lab01-arp-icmp.pcap`
+The `ping` command uses ICMP messages to check reachability.
 
+### ICMP Echo Request — Packet 9
 
+| Field | Captured value |
+| --- | --- |
+| Source IPv4 | `192.168.10.10` (PC1) |
+| Destination IPv4 | `192.168.10.20` (PC2) |
+| IPv4 Protocol | `1` (ICMP) |
+| TTL | `64` |
+| ICMP Type | `8` (Echo Request) |
+| ICMP Code | `0` |
 
-\## 11. Wireshark Analysis
+![Wireshark capture of ICMP Echo Request](screenshots/03-icmp-request.png)
 
+### ICMP Echo Reply — Packet 10
 
+| Field | Captured value |
+| --- | --- |
+| Source IPv4 | `192.168.10.20` (PC2) |
+| Destination IPv4 | `192.168.10.10` (PC1) |
+| IPv4 Protocol | `1` (ICMP) |
+| TTL | `64` |
+| ICMP Type | `0` (Echo Reply) |
+| ICMP Code | `0` |
 
-The PCAP file was opened in Wireshark to inspect the captured traffic.
+![Wireshark capture of ICMP Echo Reply](screenshots/04-icmp-reply.png)
 
+**Observation:** Source and destination IP addresses are reversed in the reply. The Request and Reply share the same ICMP Identifier and Sequence Number, allowing them to be matched.
 
+### Encapsulation
 
-The following display filters can be used:
-
-
-
-\*\*ARP traffic:\*\*
-
-
+In the captured ICMP Request, the protocol layers are nested:
 
 ```text
-
-arp
-
+Ethernet II frame                   98 bytes
+├── Ethernet header                 14 bytes
+└── IPv4 packet                     84 bytes
+    ├── IPv4 header                 20 bytes
+    └── ICMP message                64 bytes
+        ├── ICMP header              8 bytes
+        └── Payload                 56 bytes
 ```
 
+Wireshark reports an **IPv4 Total Length of 84 bytes** because that field excludes the Ethernet header.
 
+## 9. Troubleshooting Notes
 
-\*\*ICMP traffic:\*\*
+| Issue | Cause | Resolution |
+| --- | --- | --- |
+| Invalid collision domain | A name containing spaces was used | Use the alphanumeric domain `A` |
+| Interface configuration error | `eth 0` was entered instead of `eth0` | Use the exact Linux interface name |
+| ARP discovery absent from initial packets | A neighbor mapping may already be cached | Flush the neighbor cache and retry |
+| Configuration lost after recreation | IP addresses were entered manually | Define host configuration in `.startup` files |
 
+## 10. Lessons Learned
 
+- Hosts sharing one IP subnet and Ethernet segment can communicate without a router.
+- IPv4 addresses identify network-layer endpoints; MAC addresses identify link-layer interfaces.
+- ARP Requests commonly use Ethernet broadcast; ARP Replies can use unicast.
+- ICMP Type `8` is an Echo Request; Type `0` is an Echo Reply.
+- `tcpdump` collects packet evidence; Wireshark helps interpret it.
+- Startup scripts make network labs easier to reproduce and troubleshoot.
 
-```text
+## 11. Next Steps
 
-icmp
+Future exercises will extend this environment with routing between subnets, additional hosts, network services, traffic filtering, and automated tests.
 
-```
+---
 
-
-
-\*\*ARP or ICMP:\*\*
-
-
-
-```text
-
-arp || icmp
-
-```
-
-\### ARP Request
-
-!\[ARP Request](screenshots/01-arp-request.png)
-
-
-
-\### ARP Reply
-
-!\[ARP Reply](screenshots/02-arp-reply.png)
-
-
-
-\### ICMP Echo Request
-
-!\[ICMP Echo Request](screenshots/03-icmp-request.png)
-
-
-
-\### ICMP Echo Reply
-
-!\[ICMP Echo Reply](screenshots/04-icmp-reply.png)
-
-
-
-\### Key Observations
-
-
-
-1\. An ARP Request uses the Ethernet broadcast destination address.
-
-2\. An ARP Reply can be delivered directly to the requesting host.
-
-3\. ICMP Echo Request uses Type 8.
-
-4\. ICMP Echo Reply uses Type 0.
-
-5\. Source and destination IP addresses are reversed in the Echo Reply.
-
-6\. Neighbor cache maintenance can generate additional ARP traffic after successful ICMP communication.
-
-
-
-\## 12. Troubleshooting
-
-
-
-Several issues were encountered and resolved during the laboratory.
-
-
-
-\### Invalid Collision Domain Name
-
-
-
-\*\*Problem:\*\*
-
-
-
-```text
-
-Collision domain `LAN A` contains
-
-non-alphanumeric characters.
-
-```
-
-
-
-\*\*Solution:\*\*
-
-
-
-The collision domain was renamed to `A`, a valid identifier accepted by Kathara.
-
-
-
-\### Incorrect Interface Name
-
-
-
-\*\*Problem:\*\*
-
-
-
-```text
-
-ip addr add 192.168.10.10/24 dev eth 0
-
-```
-
-
-
-\*\*Solution:\*\*
-
-
-
-The interface name was corrected from `eth 0` to `eth0`.
-
-
-
-\### Incomplete PowerShell Command
-
-
-
-\*\*Problem:\*\*
-
-
-
-An unclosed quotation mark caused PowerShell to display the continuation prompt `>>`.
-
-
-
-\*\*Solution:\*\*
-
-
-
-The incomplete command was cancelled using `Ctrl + C` and re-entered with the correct quotation marks.
-
-
-
-\### Missing ARP Packets
-
-
-
-\*\*Problem:\*\*
-
-
-
-An initial capture did not show the expected ARP discovery before ICMP communication.
-
-
-
-\*\*Explanation:\*\*
-
-
-
-The required IP-to-MAC mapping may already have existed in the neighbor cache.
-
-
-
-\*\*Solution:\*\*
-
-
-
-The cache was cleared before starting a new communication test.
-
-
-
-\## 13. Lessons Learned
-
-
-
-This laboratory provided practical experience in basic networking and packet analysis.
-
-
-
-The main lessons were:
-
-
-
-\- Devices in the same subnet and Ethernet segment can communicate without a router.
-
-\- IP addresses and MAC addresses serve different purposes.
-
-\- ARP resolves IPv4 addresses to local link-layer addresses.
-
-\- Ethernet broadcast and unicast communication behave differently.
-
-\- ICMP can be used to test network reachability.
-
-\- Wireshark enables detailed inspection of network protocol headers.
-
-\- Linux networking tools are useful for both configuration and troubleshooting.
-
-\- Automated startup scripts improve laboratory reproducibility.
-
-
-
-\## 14. Future Improvements
-
-
-
-Potential extensions of this laboratory include:
-
-
-
-\- Adding a third host.
-
-\- Introducing multiple subnets.
-
-\- Configuring static routing with a Linux router.
-
-\- Studying TTL changes across routed networks.
-
-\- Investigating TCP and UDP traffic.
-
-\- Creating automated connectivity tests.
-
-\- Introducing DNS and DHCP services.
-
-
-
-\---
-
-
-
-\*\*Project Type:\*\* Hands-on Networking Laboratory  
-
-\*\*Status:\*\* Connectivity and packet analysis completed; startup configuration prepared for reproducibility testing.  
-
-\*\*Purpose:\*\* Practical networking education and technical portfolio development.
-
-
-
+**Lab status:** Connectivity and packet analysis completed.  
+**Project:** [Networking Labs](../../README.md)
