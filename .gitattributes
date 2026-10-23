@@ -1,0 +1,12 @@
+# Linux and Kathara configurations
+*.startup text eol=lf
+*.conf text eol=lf
+*.sh text eol=lf
+
+# Documentation
+*.md text eol=lf
+
+# Binary files
+*.png binary
+*.pcap binary
+*.pkt binary
